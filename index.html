@@ -5,21 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Countdown</title>
 <style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    overflow: hidden;
-  }
-  /* Fill the web_view host iframe and center the label in it. */
-  #wrap {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  /* Fill the web_view host iframe; align the label to match the original node. */
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; }
   #label {
+    font-family: -apple-system, system-ui, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     line-height: 1;
@@ -29,47 +19,53 @@
 <body>
   <div id="wrap"><span id="label"></span></div>
   <script>
-    // Rolling countdown that reproduces Superwall's `localDateTime | date_add: "Nm"`:
-    // the deadline is computed once at load as (now + start seconds), so every open
-    // restarts the timer, unlike RC's native Countdown which targets a fixed date.
+    // Rolling countdown reproducing Superwall's `localDateTime | date_add: "Nm" |
+    // countdown_from: state.now`: the deadline is computed once at load as
+    // (now + start seconds), so every open restarts it. RC's native Countdown only
+    // targets a fixed absolute date and can't express this per-session behavior.
     //
-    // Config via query string so one hosted file serves every timer paywall:
-    //   start  seconds until zero at load        (default 600 = 10:00)
-    //   capMin cap on the minutes field          (e.g. 9 => never shows "10:xx")
-    //   prefix text before the clock             (e.g. "Ends in ")
-    //   color  CSS color                         (default #000)
-    //   size   font-size px                      (default 20)
-    //   weight font-weight                       (default 700)
-    //   family font-family                       (default system)
-    //   align  flex alignment: center|start|end  (default center)
-    //   hideAt0  "1" hides the label once ended  (default shows 0:00)
+    // Query string (one hosted bundle serves every timer paywall):
+    //   start      seconds until zero at load          (default 600 = 10:00)
+    //   capMin     cap the minutes field               (gift timers: 9)
+    //   prefix     text before the clock               ("Ends in ")
+    //   color      light-mode color                    (default #000)
+    //   colorDark  dark-mode color (prefers-color-scheme); falls back to color
+    //   size       font-size px                        (default 20)
+    //   weight     font-weight                         (default 700)
+    //   lineHeight line-height px                       (default: 1)
+    //   family     font-family override
+    //   letter     letter-spacing px
+    //   align      start | center | end                (default start)
+    //   hideAt0    "1" hides the label once ended
     const q = new URLSearchParams(location.search);
-    const num = (k, d) => {
-      const v = Number(q.get(k));
-      return Number.isFinite(v) && q.get(k) !== null ? v : d;
-    };
+    const has = (k) => q.get(k) !== null;
+    const num = (k, d) => { const v = Number(q.get(k)); return has(k) && Number.isFinite(v) ? v : d; };
+
     const startS = num('start', 600);
-    const capMin = q.get('capMin') !== null ? num('capMin', Infinity) : Infinity;
+    const capMin = has('capMin') ? num('capMin', Infinity) : Infinity;
     const prefix = q.get('prefix') ?? '';
     const hideAt0 = q.get('hideAt0') === '1';
 
+    const wrap = document.getElementById('wrap');
     const label = document.getElementById('label');
-    label.style.color = q.get('color') || '#000';
+
+    const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const color = (dark && has('colorDark')) ? q.get('colorDark') : (q.get('color') || '#000');
+    label.style.color = color;
     label.style.fontSize = (q.get('size') || '20') + 'px';
     label.style.fontWeight = q.get('weight') || '700';
-    if (q.get('family')) label.style.fontFamily = q.get('family');
+    if (has('lineHeight')) label.style.lineHeight = q.get('lineHeight') + 'px';
+    if (q.get('family')) label.style.fontFamily = q.get('family') + ', -apple-system, system-ui, sans-serif';
+    if (has('letter')) label.style.letterSpacing = q.get('letter') + 'px';
     const alignMap = { start: 'flex-start', end: 'flex-end', center: 'center' };
-    document.getElementById('wrap').style.justifyContent = alignMap[q.get('align')] || 'center';
+    wrap.style.justifyContent = alignMap[q.get('align')] || 'flex-start';
 
     const deadline = Date.now() + startS * 1000;
     const pad = (n) => String(n).padStart(2, '0');
 
     function render() {
       const remMs = deadline - Date.now();
-      if (remMs <= 0) {
-        label.textContent = hideAt0 ? '' : prefix + '0:00';
-        return;
-      }
+      if (remMs <= 0) { label.textContent = hideAt0 ? '' : prefix + '0:00'; return; }
       const totalSec = Math.ceil(remMs / 1000);
       let min = Math.floor(totalSec / 60);
       const sec = totalSec % 60;
