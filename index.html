@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Countdown</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+  }
+  /* Fill the web_view host iframe and center the label in it. */
+  #wrap {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #label {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    line-height: 1;
+  }
+</style>
+</head>
+<body>
+  <div id="wrap"><span id="label"></span></div>
+  <script>
+    // Rolling countdown that reproduces Superwall's `localDateTime | date_add: "Nm"`:
+    // the deadline is computed once at load as (now + start seconds), so every open
+    // restarts the timer, unlike RC's native Countdown which targets a fixed date.
+    //
+    // Config via query string so one hosted file serves every timer paywall:
+    //   start  seconds until zero at load        (default 600 = 10:00)
+    //   capMin cap on the minutes field          (e.g. 9 => never shows "10:xx")
+    //   prefix text before the clock             (e.g. "Ends in ")
+    //   color  CSS color                         (default #000)
+    //   size   font-size px                      (default 20)
+    //   weight font-weight                       (default 700)
+    //   family font-family                       (default system)
+    //   align  flex alignment: center|start|end  (default center)
+    //   hideAt0  "1" hides the label once ended  (default shows 0:00)
+    const q = new URLSearchParams(location.search);
+    const num = (k, d) => {
+      const v = Number(q.get(k));
+      return Number.isFinite(v) && q.get(k) !== null ? v : d;
+    };
+    const startS = num('start', 600);
+    const capMin = q.get('capMin') !== null ? num('capMin', Infinity) : Infinity;
+    const prefix = q.get('prefix') ?? '';
+    const hideAt0 = q.get('hideAt0') === '1';
+
+    const label = document.getElementById('label');
+    label.style.color = q.get('color') || '#000';
+    label.style.fontSize = (q.get('size') || '20') + 'px';
+    label.style.fontWeight = q.get('weight') || '700';
+    if (q.get('family')) label.style.fontFamily = q.get('family');
+    const alignMap = { start: 'flex-start', end: 'flex-end', center: 'center' };
+    document.getElementById('wrap').style.justifyContent = alignMap[q.get('align')] || 'center';
+
+    const deadline = Date.now() + startS * 1000;
+    const pad = (n) => String(n).padStart(2, '0');
+
+    function render() {
+      const remMs = deadline - Date.now();
+      if (remMs <= 0) {
+        label.textContent = hideAt0 ? '' : prefix + '0:00';
+        return;
+      }
+      const totalSec = Math.ceil(remMs / 1000);
+      let min = Math.floor(totalSec / 60);
+      const sec = totalSec % 60;
+      if (min > capMin) min = capMin;
+      label.textContent = prefix + min + ':' + pad(sec);
+    }
+
+    render();
+    setInterval(render, 250);
+  </script>
+</body>
+</html>
